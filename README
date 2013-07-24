@@ -1,0 +1,40 @@
+rtp2httpd - Multicast RTP to Unicast HTTP stream convertor
+Copyright (c) 2008-2010 Ondrej Caletka <o.caletka@sh.cvut.cz>
+
+What is it
+==========
+
+This program converts multicast RTP/UDP media into http stream.
+It acts as a tiny HTTP server. When client connect,
+pre-configured multicast RTP service is choosen by URL.
+Program then join pre-configured multicast address and translate
+incoming RTP data to HTTP stream.
+
+It's main purpose is to remotely watch multicast video and audio
+broadcast, when your internet connection in the first-mile
+(e.g. broadband router) does not support multicast routing.
+
+Main advantage over translating streams in vlc (http://www.videolan.org)
+is that multicast group is joined _after_ the HTTP client connects,
+and is leaved immediately after HTTP client disconnects. So,
+server can be run all the time and consume almost no bandwidth nor CPU
+power, until HTTP client connects.
+
+Installation
+============
+
+The package uses GNU autotools. See INSTALL for details.
+
+Configuration
+=============
+
+See provided configfile for example, run program with --help for
+a list of command line switches.
+
+DO NOT RUN THIS PROGRAM AS ROOT. IT IS NOT NECESSARY
+
+
+If you are not a spambot,
+feel free for contact me at o.caletka@sh.cvut.cz
+
+Ondrej Caletka
