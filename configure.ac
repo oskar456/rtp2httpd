@@ -1,8 +1,8 @@
 dnl Process this file with autoconf to produce a configure script.
 AC_INIT([rtp2httpd],[1.0])
-AC_CONFIG_SRCDIR([rtp2httpd.c])
+AC_CONFIG_SRCDIR([src/rtp2httpd.c])
 AM_INIT_AUTOMAKE
-AM_CONFIG_HEADER(config.h)
+AM_CONFIG_HEADER(src/config.h)
 
 dnl Checks for programs.
 AC_PROG_CC
@@ -24,8 +24,8 @@ CONFFILE_DIR=`(
 )`
 AC_DEFINE_UNQUOTED(CONFPATH, "$CONFFILE_DIR", system config directory)
 
+AC_CONFIG_FILES([Makefile src/Makefile])
 
-AC_OUTPUT(Makefile)
+AC_OUTPUT
+
 echo -e "\nAll done. Run make now."
-
-
