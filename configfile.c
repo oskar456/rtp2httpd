@@ -241,21 +241,26 @@ int parseConfigFile(char *path) {
 			continue;
 		if (line[i] == '[') { /* section change */
 			char *end = index(line+i, ']');
-			char *secname = strndupa(line+i+1, end-line-i-1);
-			if (strcasecmp("bind", secname) == 0) {
-				section = SEC_BIND;
+			if (end) {
+				char *secname = strndupa(line+i+1, end-line-i-1);
+				if (strcasecmp("bind", secname) == 0) {
+					section = SEC_BIND;
+					continue;
+				}
+				if (strcasecmp("services", secname) == 0) {
+					section = SEC_SERVICES;
+					continue;
+				}
+				if (strcasecmp("global", secname) == 0) {
+					section = SEC_GLOBAL;
+					continue;
+				}
+				logger(LOG_ERROR,"Invalid section name: %s\n", secname);
+				continue;
+			} else {
+				logger(LOG_ERROR,"Unterminated section: %s\n", line+i);
 				continue;
 			}
-			if (strcasecmp("services", secname) == 0) {
-				section = SEC_SERVICES;
-				continue;
-			}
-			if (strcasecmp("global", secname) == 0) {
-				section = SEC_GLOBAL;
-				continue;
-			}
-			logger(LOG_ERROR,"Invalid section name: %s\n", secname);
-			continue;
 		}
 
 		switch(section) {
