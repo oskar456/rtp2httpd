@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <stdarg.h>
 #include <errno.h>
 #include <sys/select.h>
@@ -75,14 +76,14 @@ int clientcount = 0;
  * @returns Whatever printf returns
  */
 int logger(enum loglevel level, const char *format, ...) {
-	va_list ap, aq;
-	int r;
+	va_list ap;
+	int r=0;
 	if (conf_verbosity >= level) {
 		va_start(ap, format);
 		r=vfprintf(stderr,format, ap);
 		va_end(ap);
-		return r;
 	}
+	return r;
 }
 
 
@@ -94,7 +95,7 @@ void childhandler(int signum) { /* SIGCHLD handler */
 	char hbuf[NI_MAXHOST], sbuf[NI_MAXSERV];
 
 
-	while ( child = waitpid (-1, &status, WNOHANG) > 0){
+	while ( (child = waitpid (-1, &status, WNOHANG)) > 0){
 	
 		for (cli = clients; cli; cli = cli->next) {
 			if (child == cli->pid)
@@ -114,7 +115,7 @@ void childhandler(int signum) { /* SIGCHLD handler */
 					WIFSIGNALED(status));
 			}
 
-			// remove client from the list
+			/* remove client from the list */
 			if (cli == clients) {
 				clients=cli->next;
 				free(cli);
@@ -245,7 +246,10 @@ int main(int argc, char *argv[]) {
 
 	if (conf_daemonise) {
 		logger(LOG_INFO, "Forking to background...\n");
-		daemon(1, 0);
+		if (daemon(1, 0) != 0) {
+			logger(LOG_FATAL, "Cannot fork: %s\n", strerror(errno));
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	signal(SIGCHLD, &childhandler);
@@ -268,7 +272,7 @@ int main(int argc, char *argv[]) {
 				/* We have to mask SIGCHLD before we add child to the list*/
 				sigprocmask(SIG_BLOCK, &childset, NULL);
 				clientcount++;
-				if (child = fork()) { /* PARENT */
+				if ((child = fork())) { /* PARENT */
 					close(cls);
 					newc = malloc(sizeof(struct client_s));
 					newc->ss = client;

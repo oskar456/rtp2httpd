@@ -1,14 +1,21 @@
-rtp2httpd - Multicast RTP to Unicast HTTP stream convertor
-Copyright (c) 2008-2010 Ondrej Caletka <o.caletka@sh.cvut.cz>
+Multicast RTP to Unicast HTTP stream convertor
+==============================================
+
+Copyright (c) 2008-2013 Ondřej Caletka
 
 What is it
-==========
+----------
 
 This program converts multicast RTP/UDP media into http stream.
 It acts as a tiny HTTP server. When client connect,
 pre-configured multicast RTP service is choosen by URL.
 Program then join pre-configured multicast address and translate
 incoming RTP data to HTTP stream.
+
+As an alternative to pre-configured address, there is also a [UDPxy][1]
+compatibility mode. If URL looks like `/<rtp|udp>/<multicast address>:<port>`
+and UDPxy mode is enabled (which is default), the program joins address
+contained in the URL.
 
 It's main purpose is to remotely watch multicast video and audio
 broadcast, when your internet connection in the first-mile
@@ -20,21 +27,19 @@ and is leaved immediately after HTTP client disconnects. So,
 server can be run all the time and consume almost no bandwidth nor CPU
 power, until HTTP client connects.
 
+[1]: http://www.udpxy.com/index-en.html
+
 Installation
-============
+------------
 
 The package uses GNU autotools. See INSTALL for details.
 
 Configuration
-=============
+-------------
 
 See provided configfile for example, run program with --help for
 a list of command line switches.
 
-DO NOT RUN THIS PROGRAM AS ROOT. IT IS NOT NECESSARY
+__Do not run rtp2httpd as root. Choose some unprivileged port numer and run
+it under unprivileged user account.__
 
-
-If you are not a spambot,
-feel free for contact me at o.caletka@sh.cvut.cz
-
-Ondrej Caletka

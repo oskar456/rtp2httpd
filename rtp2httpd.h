@@ -72,6 +72,7 @@ struct services_s {
 
 extern enum loglevel conf_verbosity;
 extern int conf_daemonise;
+extern int conf_udpxy;
 extern int conf_maxclients;
 
 /* GLOBALS */

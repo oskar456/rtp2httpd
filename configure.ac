@@ -1,5 +1,5 @@
 dnl Process this file with autoconf to produce a configure script.
-AC_INIT([rtp2httpd],[0.4])
+AC_INIT([rtp2httpd],[1.0])
 AC_CONFIG_SRCDIR([rtp2httpd.c])
 AM_INIT_AUTOMAKE
 AM_CONFIG_HEADER(config.h)

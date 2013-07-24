@@ -22,6 +22,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/socket.h>
 #include <string.h>
 #include <strings.h>
@@ -124,12 +125,10 @@ static const char staticHeaders[] =
 struct services_s *services = NULL;
 
 
-
-
 /*
  * Ensures that all data are written to the socket
  */
-inline void writeToClient(int s,const char *buf, const size_t buflen) {
+inline void writeToClient(int s,const uint8_t *buf, const size_t buflen) {
 	size_t actual, written=0;
 	while (written<buflen) {
 		actual = write(s, buf+written, buflen-written);
@@ -147,11 +146,11 @@ inline void writeToClient(int s,const char *buf, const size_t buflen) {
  * @params type index to contentTypes[] array
  */
 inline void headers(int s, int status, int type) {
-	writeToClient(s, responseCodes[status],
+	writeToClient(s, (uint8_t*) responseCodes[status],
 			strlen(responseCodes[status]));
-	writeToClient(s, contentTypes[type],
+	writeToClient(s, (uint8_t*) contentTypes[type],
 			strlen(contentTypes[type]));
-	writeToClient(s, staticHeaders,
+	writeToClient(s, (uint8_t*) staticHeaders,
 			sizeof(staticHeaders)-1);
 }
 
@@ -160,8 +159,82 @@ void sigpipe_handler(int signum) {
 	exit(RETVAL_WRITE_FAILED);
 }
 
+/**
+ * Parses URL in UDPxy format, i.e. /rtp/<maddr>:port
+ * returns a pointer to statically alocated service struct if success,
+ * NULL otherwise.
+ */
 
-void startRTPstream(int client, struct services_s *service){
+static struct services_s* udpxy_parse(char* url) {
+	static struct services_s serv;
+	static struct addrinfo res_ai;
+	static struct sockaddr_storage res_addr;
+
+	char *addrstr, *portstr;
+	int i, r;
+	char c;
+	struct addrinfo hints, *res;
+
+
+	if (strncmp("/rtp/", url, 5) == 0)
+		serv.service_type = SERVICE_MRTP;
+	else if (strncmp("/udp/", url, 5) == 0)
+		serv.service_type = SERVICE_MUDP;
+	else
+		return NULL;
+	addrstr = rindex(url, '/');
+	if (!addrstr)
+		return NULL;
+	/* Decode URL encoded strings */
+	for (i=0; i<strlen(addrstr); i++) {
+		if (addrstr[i] == '%' &&
+		    sscanf(addrstr+i+1, "%2hhx", (unsigned char *) &c) >0 ) {
+			addrstr[i] = c;
+			memmove(addrstr+i+1, addrstr+i+3, 1+strlen(addrstr+i+3));
+		}
+	}
+	logger(LOG_DEBUG, "decoded addr: %s\n", addrstr);
+	if (addrstr[1] == '[') {
+		portstr = index(addrstr, ']');
+		addrstr += 2;
+		if (portstr) {
+			*portstr = '\0';
+			portstr = rindex(++portstr, ':');
+		}
+	} else {
+		portstr = rindex(addrstr++, ':');
+	}
+	if (portstr) {
+		*portstr = '\0';
+		portstr++;
+	} else
+		portstr = "1234";
+	logger(LOG_DEBUG, "addrstr: %s portstr: %s\n", addrstr, portstr);
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_socktype = SOCK_DGRAM;
+	r = getaddrinfo(addrstr, portstr, &hints, &res);
+	if (r) {
+		logger(LOG_ERROR, "Cannot resolve Multicast address. GAI: %s\n",
+		       gai_strerror(r));
+		return NULL;
+	}
+	if (res->ai_next != NULL) {
+		logger(LOG_ERROR, "Warning: maddr is ambiguos.\n");
+	}
+	/* Copy result into statically allocated structs */
+	memcpy(&res_addr, res->ai_addr, res->ai_addrlen);
+	memcpy(&res_ai, res, sizeof(struct addrinfo));
+	res_ai.ai_addr = (struct sockaddr*) &res_addr;
+	res_ai.ai_canonname = NULL;
+	res_ai.ai_next = NULL;
+	serv.addr = &res_ai;
+
+	return &serv;
+}
+
+
+static void startRTPstream(int client, struct services_s *service){
 	int sock, level;
 	int r;
 	struct group_req gr;
@@ -218,8 +291,8 @@ void startRTPstream(int client, struct services_s *service){
 	while(1) {
 		FD_ZERO(&rfds);
 		FD_SET(sock, &rfds);
-		FD_SET(client, &rfds); // Will be set if connection to client lost.
-		timeout.tv_sec = 20;
+		FD_SET(client, &rfds); /* Will be set if connection to client lost.*/
+		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
 		
 		/* We use select to get rid of recv stuck if
@@ -228,10 +301,10 @@ void startRTPstream(int client, struct services_s *service){
 		r=select(sock+1, &rfds, NULL, NULL, &timeout);
 		if (r<0 && errno==EINTR)
 			continue;
-		if (r==0) { //timeout reached
+		if (r==0) { /* timeout reached */
 			exit(RETVAL_SOCK_READ_FAILED);
 		}
-		if (FD_ISSET(client, &rfds)) { //client written stg, or conn. lost	
+		if (FD_ISSET(client, &rfds)) { /* client written stg, or conn. lost	 */
 			exit(RETVAL_WRITE_FAILED);
 		}
 
@@ -295,7 +368,6 @@ void clientService(int s) {
 	char *method, *url, httpver;
 	char *urlfrom;
 	struct services_s *servi;
-	int length, length1;
 
 	signal(SIGPIPE, &sigpipe_handler);
 
@@ -311,14 +383,14 @@ void clientService(int s) {
 	logger(LOG_DEBUG,"request: %s %s \n", method, url);
 
 	if(numfields == 3) { /* Read and discard all headers before replying */
-		while(fgets(buf, sizeof(buf), client)>0 &&
+		while(fgets(buf, sizeof(buf), client) != NULL &&
 			strcmp("\r\n", buf) != 0);
 	}
 
 	if (strcmp(method, "GET") != 0) {
 		if (numfields == 3) 
 			headers(s, STATUS_501, CONTENT_HTML);
-		writeToClient(s, unimplemented, sizeof(unimplemented)-1);
+		writeToClient(s, (uint8_t*) unimplemented, sizeof(unimplemented)-1);
 		exit(RETVAL_UNKNOWN_METHOD);
 	}
 	free(method); method=NULL;
@@ -327,7 +399,7 @@ void clientService(int s) {
 	if (urlfrom == NULL) {
 		if (numfields == 3) 
 			headers(s, STATUS_400, CONTENT_HTML);
-		writeToClient(s, badrequest, sizeof(badrequest)-1);
+		writeToClient(s, (uint8_t*) badrequest, sizeof(badrequest)-1);
 		exit(RETVAL_BAD_REQUEST);
 	}
 
@@ -336,19 +408,22 @@ void clientService(int s) {
 			break;
 	}
 
+	if (servi == NULL && conf_udpxy)
+		servi = udpxy_parse(url);
+
 	free(url); url=NULL;
 
 	if (servi == NULL) {
 		if (numfields == 3) 
 			headers(s, STATUS_404, CONTENT_HTML);
-		writeToClient(s, serviceNotFound, sizeof(serviceNotFound)-1);
+		writeToClient(s, (uint8_t*) serviceNotFound, sizeof(serviceNotFound)-1);
 		exit(RETVAL_CLEAN);
 	}
 
 	if (clientcount > conf_maxclients) { /*Too much clients*/
 		if (numfields == 3) 
 			headers(s, STATUS_503, CONTENT_HTML);
-		writeToClient(s, serviceUnavailable, sizeof(serviceUnavailable)-1);
+		writeToClient(s, (uint8_t*) serviceUnavailable, sizeof(serviceUnavailable)-1);
 		exit(RETVAL_CLEAN);
 	}
 

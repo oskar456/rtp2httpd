@@ -46,11 +46,8 @@
 
 enum loglevel conf_verbosity;
 int conf_daemonise;
+int conf_udpxy;
 int conf_maxclients;
-
-
-
-
 
 /* *** */
 
@@ -95,7 +92,7 @@ void parseBindSec(char *line) {
 
 void parseServicesSec(char *line) {
 	int i, j, r;
-	struct addrinfo hints, *res;
+	struct addrinfo hints;
 	char *servname, *type, *maddr, *mport;
 	struct services_s *service;
 
@@ -166,7 +163,7 @@ void parseServicesSec(char *line) {
 	services = service;
 }
 
-parseGlobalSec(char *line){
+void parseGlobalSec(char *line){
 	int i, j;
 	char *param, *value;
 	char *ind;
@@ -211,6 +208,17 @@ parseGlobalSec(char *line){
 			return;
 		}
 		conf_maxclients = atoi(value);
+		return;
+	}
+	if (strcasecmp("udpxy", param) == 0) {
+		if ((strcasecmp("on", value) == 0) ||
+		    (strcasecmp("true", value) == 0) ||
+		    (strcasecmp("yes", value) == 0) ||
+		    (strcasecmp("1", value) == 0)) {
+			conf_udpxy = 1;
+		} else {
+			conf_udpxy = 0;
+		}
 		return;
 	}
 
@@ -310,6 +318,7 @@ void restoreConfDefaults() {
 	conf_verbosity = LOG_ERROR;
 	conf_daemonise = 0;
 	conf_maxclients = 5;
+	conf_udpxy = 1;
 
 	while (services != NULL) {
 		servtmp = services;
@@ -348,7 +357,8 @@ PACKAGE " - Multicast RTP to Unicast HTTP stream convertor\n"
 "\n"
 "This program is free software; you can redistribute it and/or modify\n"
 "it under the terms of the GNU General Public License version 2\n"
-"as published by the Free Software Foundation.\n"
+"as published by the Free Software Foundation.\n");
+	fprintf (f,
 "\n"
 "Usage:	%s [options]\n"
 "\n"
@@ -358,6 +368,7 @@ PACKAGE " - Multicast RTP to Unicast HTTP stream convertor\n"
 "\t-q --quiet		Report only fatal errors\n"
 "\t-d --daemon		Fork to background (implies -q)\n"
 "\t-D --nodaemon		Do not daemonise. (default)\n"
+"\t-U --noudpxy		Disable UDPxy compatibility\n"
 "\t-m --maxclients <n>	Serve max n requests simultaneously (dfl 5)\n"
 "\t-c --config <file>	Read this file, instead of\n"
 "\t                 	default " CONFIGFILE "\n", prog);
@@ -372,12 +383,13 @@ void parseCmdLine(int argc, char *argv[]) {
 		{ "help",	no_argument, 0, 'h' },
 		{ "daemon",	no_argument, 0, 'd' },
 		{ "nodaemon",	no_argument, 0, 'D' },
+		{ "noudpxy",	no_argument, 0, 'U' },
 		{ "maxclients",	required_argument, 0, 'm' },
 		{ "config",	required_argument, 0, 'c' },
 		{ 0,		0, 0, 0}
 	};
 
-	const char shortopts[] = "vqhdDm:c:";
+	const char shortopts[] = "vqhdDUm:c:";
 	int option_index, opt;
 	int configfile_failed;
 
@@ -404,6 +416,9 @@ void parseCmdLine(int argc, char *argv[]) {
 				break;
 			case 'D':
 				conf_daemonise=0;
+				break;
+			case 'U':
+				conf_udpxy=0;
 				break;
 			case 'm':
 				if (atoi(optarg) < 1) {
