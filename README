@@ -32,14 +32,14 @@ power, until HTTP client connects.
 Installation
 ------------
 
-The package uses GNU autotools. See INSTALL for details.
+The package uses GNU autotools. See the file `INSTALL` for details.
 
 Configuration
 -------------
 
-See provided configfile for example, run program with --help for
+See provided configfile for example, run program with `--help` for
 a list of command line switches.
 
-__Do not run rtp2httpd as root. Choose some unprivileged port numer and run
+__Do not run rtp2httpd as root. Choose some unprivileged port number and run
 it under unprivileged user account.__
 
