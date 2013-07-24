@@ -342,11 +342,6 @@ void restoreConfDefaults() {
 }
 
 
-		
-
-
-
-
 void usage(FILE* f, char* progname) {
 	char * prog = basename(progname);
 	fprintf (f,
@@ -360,21 +355,51 @@ PACKAGE " - Multicast RTP to Unicast HTTP stream convertor\n"
 "as published by the Free Software Foundation.\n");
 	fprintf (f,
 "\n"
-"Usage:	%s [options]\n"
+"Usage: %s [options]\n"
 "\n"
 "Options:\n"
-"\t-h --help		Show this help\n"
-"\t-v --verbose		Increase verbosity\n"
-"\t-q --quiet		Report only fatal errors\n"
-"\t-d --daemon		Fork to background (implies -q)\n"
-"\t-D --nodaemon		Do not daemonise. (default)\n"
-"\t-U --noudpxy		Disable UDPxy compatibility\n"
-"\t-m --maxclients <n>	Serve max n requests simultaneously (dfl 5)\n"
-"\t-c --config <file>	Read this file, instead of\n"
-"\t                 	default " CONFIGFILE "\n", prog);
+"\t-h --help            Show this help\n"
+"\t-v --verbose         Increase verbosity\n"
+"\t-q --quiet           Report only fatal errors\n"
+"\t-d --daemon          Fork to background (implies -q)\n"
+"\t-D --nodaemon        Do not daemonise. (default)\n"
+"\t-U --noudpxy         Disable UDPxy compatibility\n"
+"\t-m --maxclients <n>  Serve max n requests simultaneously (dfl 5)\n"
+"\t-l --listen [addr:]port  Address/port to bind (default ANY:8080)\n"
+"\t-c --config <file>   Read this file, instead of\n"
+"\t                     default " CONFIGFILE "\n", prog);
 }
 
 
+void parseBindCmd(char *optarg) {
+	char *p, *node, *service;
+	struct bindaddr_s *ba;
+
+	if (optarg[0] == '[') {
+		p = index(optarg++, ']');
+		if (p) {
+			*p = '\0';
+			p = rindex(++p, ':');
+		}
+	} else {
+		p = rindex(optarg, ':');
+	}
+	if (p) {
+		*p = '\0';
+		node = strdup(optarg);
+		service = strdup(p+1);
+	} else {
+		node = NULL;
+		service = strdup(optarg);
+	}
+
+	logger(LOG_DEBUG, "node: %s, port: %s\n",node, service);
+	ba = malloc(sizeof(struct bindaddr_s));
+	ba->node = node;
+	ba->service = service;
+	ba->next = bindaddr;
+	bindaddr = ba;
+}
 
 void parseCmdLine(int argc, char *argv[]) {
 	const struct option longopts[] = {
@@ -385,11 +410,12 @@ void parseCmdLine(int argc, char *argv[]) {
 		{ "nodaemon",	no_argument, 0, 'D' },
 		{ "noudpxy",	no_argument, 0, 'U' },
 		{ "maxclients",	required_argument, 0, 'm' },
+		{ "listen",	required_argument, 0, 'l' },
 		{ "config",	required_argument, 0, 'c' },
 		{ 0,		0, 0, 0}
 	};
 
-	const char shortopts[] = "vqhdDUm:c:";
+	const char shortopts[] = "vqhdDUm:c:l:";
 	int option_index, opt;
 	int configfile_failed;
 
@@ -432,6 +458,9 @@ void parseCmdLine(int argc, char *argv[]) {
 					restoreConfDefaults();
 				configfile_failed = parseConfigFile(optarg);
 				break;
+			case 'l':
+				parseBindCmd(optarg);
+				break;
 			default:
 				logger(LOG_FATAL, "Unknown option! %d \n",opt);
 				usage(stderr, argv[0]);
@@ -439,8 +468,7 @@ void parseCmdLine(int argc, char *argv[]) {
 		}
 	}
 	if(configfile_failed) {
-		logger(LOG_FATAL, "No configfile found! Quitting.\n");
-		exit(EXIT_FAILURE);
+		logger(LOG_INFO, "Warning: No configfile found.\n");
 	}
 	logger(LOG_DEBUG, "Verbosity: %d, Daemonise: %d, Maxclients: %d\n",
 			conf_verbosity, conf_daemonise, conf_maxclients);
