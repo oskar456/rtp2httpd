@@ -1,31 +1,32 @@
-dnl Process this file with autoconf to produce a configure script.
-AC_INIT([rtp2httpd],[1.0])
-AC_CONFIG_SRCDIR([src/rtp2httpd.c])
+#                                               -*- Autoconf -*-
+# Process this file with autoconf to produce a configure script.
+
+AC_PREREQ([2.69])
+AC_INIT([rtp2httpd], [1.0], [ondrej@caletka.cz])
+AC_CONFIG_SRCDIR([src/rtp2httpd.h])
+AC_CONFIG_HEADERS([src/config.h])
 AM_INIT_AUTOMAKE
-AM_CONFIG_HEADER(src/config.h)
 
-dnl Checks for programs.
+# Checks for programs.
 AC_PROG_CC
-AC_USE_SYSTEM_EXTENSIONS([_GNU_SOURCE])
-AC_CHECK_HEADERS(stdio.h stdlib.h sys/types.h sys/socket.h netdb.h \
-		 stdarg.h errno.h sys/select.h fcntl.h string.h signal.h \
-		 sys/wait.h strings.h netinet/in.h arpa/inet.h, ,  
-		 AC_MSG_ERROR(Cannot find all required headers))
 
-AC_CHECK_FUNCS(getopt_long getaddrinfo getnameinfo strndup, ,
-	       AC_MSG_ERROR(Required functions missing))
+# Checks for libraries.
 
-# Config location for code to default to
-CONFFILE_DIR=$sysconfdir
-CONFFILE_DIR=`(
-    test "$prefix" = NONE && prefix=$ac_default_prefix
-    test "$exec_prefix" = NONE && exec_prefix=${prefix}
-    eval echo "$CONFFILE_DIR"
-)`
-AC_DEFINE_UNQUOTED(CONFPATH, "$CONFFILE_DIR", system config directory)
+# Checks for header files.
+AC_CHECK_HEADERS([arpa/inet.h fcntl.h netdb.h netinet/in.h stdlib.h string.h strings.h sys/socket.h unistd.h])
 
-AC_CONFIG_FILES([Makefile src/Makefile])
+# Checks for typedefs, structures, and compiler characteristics.
+AC_C_INLINE
+AC_TYPE_PID_T
+AC_TYPE_SIZE_T
+AC_TYPE_UINT16_T
+AC_TYPE_UINT8_T
 
+# Checks for library functions.
+AC_FUNC_FORK
+AC_FUNC_MALLOC
+AC_CHECK_FUNCS([memmove memset select socket strcasecmp strdup strerror strndup getopt_long getaddrinfo getnameinfo])
+
+AC_CONFIG_FILES([Makefile
+                 src/Makefile])
 AC_OUTPUT
-
-echo -e "\nAll done. Run make now."
