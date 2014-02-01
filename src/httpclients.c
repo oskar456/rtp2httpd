@@ -129,7 +129,8 @@ struct services_s *services = NULL;
  * Ensures that all data are written to the socket
  */
 inline void writeToClient(int s,const uint8_t *buf, const size_t buflen) {
-	size_t actual, written=0;
+	ssize_t actual;
+	size_t written=0;
 	while (written<buflen) {
 		actual = write(s, buf+written, buflen-written);
 		if (actual <= 0) {
