@@ -74,6 +74,7 @@ extern enum loglevel conf_verbosity;
 extern int conf_daemonise;
 extern int conf_udpxy;
 extern int conf_maxclients;
+extern char *conf_hostname;
 
 /* GLOBALS */
 extern struct services_s *services;

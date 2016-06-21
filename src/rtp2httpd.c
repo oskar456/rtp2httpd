@@ -110,7 +110,7 @@ void childhandler(int signum) { /* SIGCHLD handler */
 				logger(LOG_ERROR, "getnameinfo failed: %s\n",
 					gai_strerror(r));
 			} else {
-				logger(LOG_INFO, "Client %s port %s disconnected (%d, %d)\n",
+				logger(LOG_DEBUG, "Client %s port %s disconnected (%d, %d)\n",
 					hbuf, sbuf, WEXITSTATUS(status),
 					WIFSIGNALED(status));
 			}
@@ -130,7 +130,7 @@ void childhandler(int signum) { /* SIGCHLD handler */
 			}
 		} else {
 			if( child != 1 )
-				logger(LOG_DEBUG, "Unknown child finished - pid %d\n", child);
+				logger(LOG_ERROR, "Unknown child finished - pid %d\n", child);
 		}
 
 		clientcount--;

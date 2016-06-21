@@ -187,7 +187,7 @@ static struct services_s* udpxy_parse(char* url) {
 	if (!addrstr)
 		return NULL;
 	/* Decode URL encoded strings */
-	for (i=0; i<strlen(addrstr); i++) {
+	for (i=0; i<(strlen(addrstr)-2); i++) {
 		if (addrstr[i] == '%' &&
 		    sscanf(addrstr+i+1, "%2hhx", (unsigned char *) &c) >0 ) {
 			addrstr[i] = c;
@@ -367,6 +367,7 @@ void clientService(int s) {
 	FILE *client;
 	int numfields;
 	char *method, *url, httpver;
+	char *hostname;
 	char *urlfrom;
 	struct services_s *servi;
 
@@ -381,12 +382,19 @@ void clientService(int s) {
 	if(numfields<2) {
 		logger(LOG_DEBUG, "Non-HTTP input.\n");
 	}
-	logger(LOG_DEBUG,"request: %s %s \n", method, url);
+	logger(LOG_INFO,"request: %s %s \n", method, url);
 
 	if(numfields == 3) { /* Read and discard all headers before replying */
 		while(fgets(buf, sizeof(buf), client) != NULL &&
-			strcmp("\r\n", buf) != 0);
-	}
+		      strcmp("\r\n", buf) != 0) {
+			if (strncasecmp("Host: ", buf, 6) == 0) {
+				hostname = strpbrk(buf+6, ":\r\n");
+				if (hostname)
+					hostname = strndup(buf+6, hostname-buf-6);
+					logger(LOG_DEBUG, "Host header: %s\n", hostname);
+				}
+			}
+		}
 
 	if (strcmp(method, "GET") != 0) {
 		if (numfields == 3) 
@@ -397,7 +405,7 @@ void clientService(int s) {
 	free(method); method=NULL;
 
 	urlfrom = rindex(url, '/');
-	if (urlfrom == NULL) {
+	if (urlfrom == NULL || (conf_hostname && strcasecmp(conf_hostname, hostname)!=0)) {
 		if (numfields == 3) 
 			headers(s, STATUS_400, CONTENT_HTML);
 		writeToClient(s, (uint8_t*) badrequest, sizeof(badrequest)-1);

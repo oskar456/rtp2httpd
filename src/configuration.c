@@ -48,6 +48,7 @@ enum loglevel conf_verbosity;
 int conf_daemonise;
 int conf_udpxy;
 int conf_maxclients;
+char *conf_hostname = NULL;
 
 /* *** */
 
@@ -219,6 +220,10 @@ void parseGlobalSec(char *line){
 		} else {
 			conf_udpxy = 0;
 		}
+		return;
+	}
+	if (strcasecmp("hostname", param) == 0) {
+		conf_hostname = strdup(value);
 		return;
 	}
 
