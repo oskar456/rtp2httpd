@@ -77,11 +77,11 @@ void parseBindSec(char *line) {
 		j++;
 	service = strndup(line+i, j-i);
 
-	logger(LOG_DEBUG, "node: %s, port: %s\n",node, service);
-	if (strcmp("*", node)) {
+	if (strcmp("*", node) == 0) {
 		free(node);
 		node = NULL;
 	}
+	logger(LOG_DEBUG, "node: %s, port: %s\n",node, service);
 		
 	ba = malloc(sizeof(struct bindaddr_s));
 	ba->node = node;
