@@ -367,7 +367,7 @@ void clientService(int s) {
 	FILE *client;
 	int numfields;
 	char *method, *url, httpver;
-	char *hostname;
+	char *hostname = "";
 	char *urlfrom;
 	struct services_s *servi;
 
