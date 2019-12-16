@@ -168,13 +168,13 @@ void sigpipe_handler(int signum) {
 
 static struct services_s* udpxy_parse(char* url) {
 	static struct services_s serv;
-	static struct addrinfo res_ai;
-	static struct sockaddr_storage res_addr;
+	static struct addrinfo res_ai, msrc_res_ai;
+	static struct sockaddr_storage res_addr, msrc_res_addr;
 
-	char *addrstr, *portstr;
-	int i, r;
+	char *addrstr, *portstr, *msrc="", *msaddr="", *msport="";
+	int i, r, rr;
 	char c;
-	struct addrinfo hints, *res;
+	struct addrinfo hints, *res, *msrc_res;
 
 
 	if (strncmp("/rtp/", url, 5) == 0)
@@ -205,24 +205,77 @@ static struct services_s* udpxy_parse(char* url) {
 	} else {
 		portstr = rindex(addrstr++, ':');
 	}
+	
+	if (strstr(addrstr, "@") != NULL) {
+		char *split;
+		char *current;
+		int cnt = 0;
+		split = strtok(addrstr, "@");
+		while (split != NULL) {
+			current = split;
+			if (cnt == 0) msrc = current;
+			split = strtok(NULL, "@");
+			if (cnt > 0 && split != NULL) {
+				strcat(msrc, "@");
+				strcat(msrc, current);
+			}
+			if (cnt > 0 && split == NULL) addrstr = current;
+			cnt++;
+		}
+		
+		cnt = 0;
+		msaddr = msrc;
+		split = strtok(msrc, ":");
+		while (split != NULL) {
+			current = split;
+			if (cnt == 0) msaddr = current;
+			split = strtok(NULL, ":");
+			if (cnt > 0 && split != NULL) {
+				strcat(msaddr, ":");
+				strcat(msaddr, current);
+			}
+			if (cnt > 0 && split == NULL) msport = current;
+			cnt++;
+		}
+	}
+	
 	if (portstr) {
 		*portstr = '\0';
 		portstr++;
 	} else
 		portstr = "1234";
-	logger(LOG_DEBUG, "addrstr: %s portstr: %s\n", addrstr, portstr);
+	
+	logger(LOG_DEBUG, "addrstr: %s portstr: %s msrc: %s\n", addrstr, portstr, msrc);
 
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_socktype = SOCK_DGRAM;
 	r = getaddrinfo(addrstr, portstr, &hints, &res);
-	if (r) {
-		logger(LOG_ERROR, "Cannot resolve Multicast address. GAI: %s\n",
-		       gai_strerror(r));
+	rr = 0;
+	if (strcmp(msrc, "") != 0 && msrc != NULL) {
+		rr = getaddrinfo(msrc, 0, &hints, &msrc_res);
+	}
+	if (r | rr) {
+		if (r) {
+			logger(LOG_ERROR, "Cannot resolve Multicast address. GAI: %s\n",
+				   gai_strerror(r));
+		}
+		if (rr) {
+			logger(LOG_ERROR, "Cannot resolve Multicast source address. GAI: %s\n",
+				   gai_strerror(rr));
+		}
+			
+		free(msrc);
 		return NULL;
 	}
 	if (res->ai_next != NULL) {
 		logger(LOG_ERROR, "Warning: maddr is ambiguos.\n");
 	}
+	if (strcmp(msrc, "") != 0 && msrc != NULL) {
+		if (msrc_res->ai_next != NULL) {
+			logger(LOG_ERROR, "Warning: msrc is ambiguos.\n");
+		}
+	}
+	
 	/* Copy result into statically allocated structs */
 	memcpy(&res_addr, res->ai_addr, res->ai_addrlen);
 	memcpy(&res_ai, res, sizeof(struct addrinfo));
@@ -230,6 +283,18 @@ static struct services_s* udpxy_parse(char* url) {
 	res_ai.ai_canonname = NULL;
 	res_ai.ai_next = NULL;
 	serv.addr = &res_ai;
+	
+	if (strcmp(msrc, "") != 0 && msrc != NULL) {
+		/* Copy result into statically allocated structs */
+		memcpy(&msrc_res_addr, msrc_res->ai_addr, msrc_res->ai_addrlen);
+		memcpy(&msrc_res_ai, msrc_res, sizeof(struct addrinfo));
+		msrc_res_ai.ai_addr = (struct sockaddr*) &msrc_res_addr;
+		msrc_res_ai.ai_canonname = NULL;
+		msrc_res_ai.ai_next = NULL;
+		serv.msrc_addr = &msrc_res_ai;
+	}
+	
+	serv.msrc = strdup(msrc);
 
 	return &serv;
 }
@@ -239,6 +304,7 @@ static void startRTPstream(int client, struct services_s *service){
 	int sock, level;
 	int r;
 	struct group_req gr;
+	struct group_source_req gsr;
 	uint8_t buf[UDPBUFLEN];
 	int actualr;
 	uint16_t seqn, oldseqn, notfirst=0;
@@ -246,7 +312,7 @@ static void startRTPstream(int client, struct services_s *service){
 	fd_set rfds;
 	struct timeval timeout;
 	int on = 1;
-
+	
 	sock = socket(service->addr->ai_family, service->addr->ai_socktype, 
 			service->addr->ai_protocol);
         r = setsockopt(sock, SOL_SOCKET,
@@ -255,12 +321,14 @@ static void startRTPstream(int client, struct services_s *service){
                 logger(LOG_ERROR, "SO_REUSEADDR "
                 "failed: %s\n", strerror(errno));
         }
+	
 	r = bind(sock,(struct sockaddr *) service->addr->ai_addr, service->addr->ai_addrlen);
 	if (r) {
 		logger(LOG_ERROR, "Cannot bind: %s\n",
 				strerror(errno));
 		exit(RETVAL_RTP_FAILED);
 	}
+	
 	memcpy(&(gr.gr_group), service->addr->ai_addr, service->addr->ai_addrlen);
 
 	switch (service->addr->ai_family) {
@@ -277,10 +345,19 @@ static void startRTPstream(int client, struct services_s *service){
 		default:
 			logger(LOG_ERROR, "Address family don't support mcast.\n");
 			exit(RETVAL_SOCK_READ_FAILED);
-	}			 
-
-	r = setsockopt(sock, level,
-		MCAST_JOIN_GROUP, &gr, sizeof(gr));
+	}
+	
+	if (strcmp(service->msrc, "") != 0 && service->msrc != NULL) {
+		gsr.gsr_group = gr.gr_group;
+		gsr.gsr_interface = gr.gr_interface;
+		memcpy(&(gsr.gsr_source), service->msrc_addr->ai_addr, service->msrc_addr->ai_addrlen);
+		r = setsockopt(sock, level,
+			MCAST_JOIN_SOURCE_GROUP, &gsr, sizeof(gsr));
+	} else {
+		r = setsockopt(sock, level,
+			MCAST_JOIN_GROUP, &gr, sizeof(gr));
+	}
+	
 	if (r) {
 		logger(LOG_ERROR, "Cannot join mcast group: %s\n",
 				strerror(errno));

@@ -52,6 +52,12 @@ char *conf_hostname = NULL;
 
 /* *** */
 
+int cmd_verbosity_set;
+int cmd_daemonise_set;
+int cmd_udpxy_set;
+int cmd_maxclients_set;
+int cmd_bind_set;
+
 enum section_e {
 	SEC_NONE = 0,
 	SEC_BIND,
@@ -92,9 +98,9 @@ void parseBindSec(char *line) {
 }
 
 void parseServicesSec(char *line) {
-	int i, j, r;
+	int i, j, r, rr;
 	struct addrinfo hints;
-	char *servname, *type, *maddr, *mport;
+	char *servname, *type, *maddr, *mport, *msrc="", *msaddr="", *msport="";
 	struct services_s *service;
 
 	memset(&hints, 0, sizeof(hints));
@@ -129,12 +135,46 @@ void parseServicesSec(char *line) {
 		j++;
 	mport = strndupa(line+i, j-i);
 
-	logger(LOG_DEBUG,"serv: %s, type: %s, maddr: %s, mport: %s\n",
-			servname, type, maddr, mport);
+	if (strstr(maddr, "@") != NULL) {
+		char *split;
+		char *current;
+		int cnt = 0;
+		split = strtok(maddr, "@");
+		while (split != NULL) {
+			current = split;
+			if (cnt == 0) msrc = current;
+			split = strtok(NULL, "@");
+			if (cnt > 0 && split != NULL) {
+				strcat(msrc, "@");
+				strcat(msrc, current);
+			}
+			if (cnt > 0 && split == NULL) maddr = current;
+			cnt++;
+		}
+		
+		cnt = 0;
+		msaddr = msrc;
+		split = strtok(msrc, ":");
+		while (split != NULL) {
+			current = split;
+			if (cnt == 0) msaddr = current;
+			split = strtok(NULL, ":");
+			if (cnt > 0 && split != NULL) {
+				strcat(msaddr, ":");
+				strcat(msaddr, current);
+			}
+			if (cnt > 0 && split == NULL) msport = current;
+			cnt++;
+		}
+	}
+
+	logger(LOG_DEBUG,"serv: %s, type: %s, maddr: %s, mport: %s, msaddr: %s, msport: %s\n",
+			servname, type, maddr, mport, msaddr, msport);
 
 	if ((strcasecmp("MRTP", type) != 0) && (strcasecmp("MUDP", type) != 0)) {
 		logger(LOG_ERROR, "Unsupported service type: %s\n", type);
 		free(servname);
+		free(msrc);
 		return;
 	}
 
@@ -142,15 +182,31 @@ void parseServicesSec(char *line) {
 	memset(service, 0, sizeof(*service));
 	
 	r = getaddrinfo(maddr, mport, &hints, &(service->addr));
-	if (r) {
-		logger(LOG_ERROR, "Cannot init service %s. GAI: %s\n",
-				servname, gai_strerror(r));
+	rr = 0;
+	if (strcmp(msrc, "") != 0 && msrc != NULL) {
+		rr = getaddrinfo(msaddr, msport, &hints, &(service->msrc_addr));
+	}
+	if (r || rr) {
+		if (r) {
+			logger(LOG_ERROR, "Cannot init service %s. GAI: %s\n",
+					servname, gai_strerror(r));
+		}
+		if (rr) {
+			logger(LOG_ERROR, "Cannot init service %s. GAI: %s\n",
+					servname, gai_strerror(rr));
+		}
 		free(servname);
+		free(msrc);
 		free(service);
 		return;
 	}
 	if (service->addr->ai_next != NULL) {
 		logger(LOG_ERROR, "Warning: maddr is ambiguos.\n");
+	}
+	if (strcmp(msrc, "") != 0 && msrc != NULL) {
+		if (service->msrc_addr->ai_next != NULL) {
+			logger(LOG_ERROR, "Warning: msrc is ambiguos.\n");
+		}
 	}
 	
 	if(strcasecmp("MRTP", type) == 0) {
@@ -160,6 +216,7 @@ void parseServicesSec(char *line) {
 	}
 
 	service->url = servname;
+	service->msrc = strdup(msrc);
 	service->next = services;
 	services = service;
 }
@@ -189,36 +246,52 @@ void parseGlobalSec(char *line){
 	value = strndupa(line+i, j-i);
 
 	if (strcasecmp("verbosity", param) == 0) {
-		conf_verbosity = atoi(value);
+		if (!cmd_verbosity_set) {
+			conf_verbosity = atoi(value);
+		} else {
+			logger(LOG_INFO, "Warning: Config file value \"verbosity\" ignored. It's already set on CmdLine.\n");
+		}
 		return;
 	}
 	if (strcasecmp("daemonise", param) == 0) {
-		if ((strcasecmp("on", value) == 0) ||
-		    (strcasecmp("true", value) == 0) ||
-		    (strcasecmp("yes", value) == 0) ||
-		    (strcasecmp("1", value) == 0)) {
-			conf_daemonise = 1;
+		if (!cmd_daemonise_set) {
+			if ((strcasecmp("on", value) == 0) ||
+			    (strcasecmp("true", value) == 0) ||
+			    (strcasecmp("yes", value) == 0) ||
+			    (strcasecmp("1", value) == 0)) {
+				conf_daemonise = 1;
+			} else {
+				conf_daemonise = 0;
+			}
 		} else {
-			conf_daemonise = 0;
+			logger(LOG_INFO, "Warning: Config file value \"daemonise\" ignored. It's already set on CmdLine.\n");
 		}
 		return;
 	}
 	if (strcasecmp("maxclients", param) == 0) {
-		if ( atoi(value) < 1) {
-			logger(LOG_ERROR, "Invalid maxclients! Ignoring.\n");
-			return;
+		if (!cmd_maxclients_set) {
+			if ( atoi(value) < 1) {
+				logger(LOG_ERROR, "Invalid maxclients! Ignoring.\n");
+				return;
+			}
+			conf_maxclients = atoi(value);
+		} else {
+			logger(LOG_INFO, "Warning: Config file value \"maxclients\" ignored. It's already set on CmdLine.\n");
 		}
-		conf_maxclients = atoi(value);
 		return;
 	}
 	if (strcasecmp("udpxy", param) == 0) {
-		if ((strcasecmp("on", value) == 0) ||
-		    (strcasecmp("true", value) == 0) ||
-		    (strcasecmp("yes", value) == 0) ||
-		    (strcasecmp("1", value) == 0)) {
-			conf_udpxy = 1;
+		if (!cmd_udpxy_set) {
+			if ((strcasecmp("on", value) == 0) ||
+			    (strcasecmp("true", value) == 0) ||
+			    (strcasecmp("yes", value) == 0) ||
+			    (strcasecmp("1", value) == 0)) {
+				conf_udpxy = 1;
+			} else {
+				conf_udpxy = 0;
+			}
 		} else {
-			conf_udpxy = 0;
+			logger(LOG_INFO, "Warning: Config file value \"udpxy\" ignored. It's already set on CmdLine.\n");
 		}
 		return;
 	}
@@ -235,7 +308,7 @@ void parseGlobalSec(char *line){
 int parseConfigFile(char *path) {
 	FILE *cfile;
 	char line[MAX_LINE];
-	int i;
+	int i, bindMsgDone=0;
 	enum section_e section = SEC_NONE;
 	
 	logger(LOG_DEBUG, "Opening %s\n",path);
@@ -276,6 +349,14 @@ int parseConfigFile(char *path) {
 			}
 		}
 
+		if (cmd_bind_set && section == SEC_BIND) {
+			if (!bindMsgDone) {
+				logger(LOG_INFO, "Warning: Config file section \"[bind]\" ignored. It's already set on CmdLine.\n");
+				bindMsgDone = 1;
+			}
+			continue;
+		}
+		
 		switch(section) {
 			case SEC_BIND:
 				parseBindSec(line+i);
@@ -321,9 +402,14 @@ void restoreConfDefaults() {
 	struct bindaddr_s *bindtmp;
 
 	conf_verbosity = LOG_ERROR;
+	cmd_verbosity_set = 0;
 	conf_daemonise = 0;
+	cmd_daemonise_set = 0;
 	conf_maxclients = 5;
+	cmd_maxclients_set = 0;
 	conf_udpxy = 1;
+	cmd_udpxy_set = 0;
+	cmd_bind_set = 0;
 
 	while (services != NULL) {
 		servtmp = services;
@@ -422,10 +508,9 @@ void parseCmdLine(int argc, char *argv[]) {
 
 	const char shortopts[] = "vqhdDUm:c:l:";
 	int option_index, opt;
-	int configfile_failed;
+	int configfile_failed = 1;
 
 	restoreConfDefaults();
-	configfile_failed = parseConfigFile(CONFIGFILE);
 
 	while ((opt = getopt_long(argc, argv, shortopts,
 			longopts, &option_index)) != -1) {
@@ -434,9 +519,11 @@ void parseCmdLine(int argc, char *argv[]) {
 				break;
 			case 'v':
 				conf_verbosity++;
+				cmd_verbosity_set = 1;
 				break;
 			case 'q':
 				conf_verbosity=0;
+				cmd_verbosity_set = 1;
 				break;
 			case 'h':
 				usage(stdout, argv[0]);
@@ -444,33 +531,39 @@ void parseCmdLine(int argc, char *argv[]) {
 				break;
 			case 'd':
 				conf_daemonise=1;
+				cmd_daemonise_set = 1;
 				break;
 			case 'D':
 				conf_daemonise=0;
+				cmd_daemonise_set = 1;
 				break;
 			case 'U':
 				conf_udpxy=0;
+				cmd_udpxy_set = 1;
 				break;
 			case 'm':
 				if (atoi(optarg) < 1) {
 					logger(LOG_ERROR, "Invalid maxclients! Ignoring.\n");
 				} else {
 					conf_maxclients = atoi(optarg);
+					cmd_maxclients_set = 1;
 				}
 				break;
 			case 'c':
-				if (!configfile_failed)
-					restoreConfDefaults();
 				configfile_failed = parseConfigFile(optarg);
 				break;
 			case 'l':
 				parseBindCmd(optarg);
+				cmd_bind_set = 1;
 				break;
 			default:
 				logger(LOG_FATAL, "Unknown option! %d \n",opt);
 				usage(stderr, argv[0]);
 				exit(EXIT_FAILURE);
 		}
+	}
+	if(configfile_failed) {
+		configfile_failed = parseConfigFile(CONFIGFILE);
 	}
 	if(configfile_failed) {
 		logger(LOG_INFO, "Warning: No configfile found.\n");

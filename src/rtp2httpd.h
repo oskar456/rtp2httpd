@@ -63,8 +63,10 @@ struct bindaddr_s {
  */
 struct services_s {
 	char *url;
+	char *msrc;
 	enum service_type service_type;
 	struct addrinfo *addr;
+	struct addrinfo *msrc_addr;
 	struct services_s *next;
 };
 
