@@ -18,7 +18,7 @@
  *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#define _GNU_SOURCE 
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -89,7 +89,7 @@ void parseBindSec(char *line) {
 		node = NULL;
 	}
 	logger(LOG_DEBUG, "node: %s, port: %s\n",node, service);
-		
+
 	ba = malloc(sizeof(struct bindaddr_s));
 	ba->node = node;
 	ba->service = service;
@@ -151,7 +151,7 @@ void parseServicesSec(char *line) {
 			if (cnt > 0 && split == NULL) maddr = current;
 			cnt++;
 		}
-		
+
 		cnt = 0;
 		msaddr = msrc;
 		split = strtok(msrc, ":");
@@ -180,7 +180,7 @@ void parseServicesSec(char *line) {
 
 	service = malloc(sizeof(struct services_s));
 	memset(service, 0, sizeof(*service));
-	
+
 	r = getaddrinfo(maddr, mport, &hints, &(service->addr));
 	rr = 0;
 	if (strcmp(msrc, "") != 0 && msrc != NULL) {
@@ -208,7 +208,7 @@ void parseServicesSec(char *line) {
 			logger(LOG_ERROR, "Warning: msrc is ambiguos.\n");
 		}
 	}
-	
+
 	if(strcasecmp("MRTP", type) == 0) {
 		service->service_type = SERVICE_MRTP;
 	} else if (strcasecmp("MUDP", type) == 0) {
@@ -310,7 +310,7 @@ int parseConfigFile(char *path) {
 	char line[MAX_LINE];
 	int i, bindMsgDone=0;
 	enum section_e section = SEC_NONE;
-	
+
 	logger(LOG_DEBUG, "Opening %s\n",path);
 	cfile = fopen(path, "r");
 	if (cfile == NULL)
@@ -356,7 +356,7 @@ int parseConfigFile(char *path) {
 			}
 			continue;
 		}
-		
+
 		switch(section) {
 			case SEC_BIND:
 				parseBindSec(line+i);

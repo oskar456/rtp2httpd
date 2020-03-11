@@ -18,7 +18,7 @@
  *  59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
-#define _GNU_SOURCE 
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -128,7 +128,7 @@ struct services_s *services = NULL;
 /*
  * Ensures that all data are written to the socket
  */
-inline void writeToClient(int s,const uint8_t *buf, const size_t buflen) {
+static void writeToClient(int s,const uint8_t *buf, const size_t buflen) {
 	ssize_t actual;
 	size_t written=0;
 	while (written<buflen) {
@@ -146,7 +146,7 @@ inline void writeToClient(int s,const uint8_t *buf, const size_t buflen) {
  * @params status index to responseCodes[] array
  * @params type index to contentTypes[] array
  */
-inline void headers(int s, int status, int type) {
+static void headers(int s, int status, int type) {
 	writeToClient(s, (uint8_t*) responseCodes[status],
 			strlen(responseCodes[status]));
 	writeToClient(s, (uint8_t*) contentTypes[type],
@@ -205,7 +205,7 @@ static struct services_s* udpxy_parse(char* url) {
 	} else {
 		portstr = rindex(addrstr++, ':');
 	}
-	
+
 	if (strstr(addrstr, "@") != NULL) {
 		char *split;
 		char *current;
@@ -222,7 +222,7 @@ static struct services_s* udpxy_parse(char* url) {
 			if (cnt > 0 && split == NULL) addrstr = current;
 			cnt++;
 		}
-		
+
 		cnt = 0;
 		msaddr = msrc;
 		split = strtok(msrc, ":");
@@ -238,13 +238,13 @@ static struct services_s* udpxy_parse(char* url) {
 			cnt++;
 		}
 	}
-	
+
 	if (portstr) {
 		*portstr = '\0';
 		portstr++;
 	} else
 		portstr = "1234";
-	
+
 	logger(LOG_DEBUG, "addrstr: %s portstr: %s msrc: %s\n", addrstr, portstr, msrc);
 
 	memset(&hints, 0, sizeof(hints));
@@ -263,7 +263,7 @@ static struct services_s* udpxy_parse(char* url) {
 			logger(LOG_ERROR, "Cannot resolve Multicast source address. GAI: %s\n",
 				   gai_strerror(rr));
 		}
-			
+
 		free(msrc);
 		return NULL;
 	}
@@ -275,7 +275,7 @@ static struct services_s* udpxy_parse(char* url) {
 			logger(LOG_ERROR, "Warning: msrc is ambiguos.\n");
 		}
 	}
-	
+
 	/* Copy result into statically allocated structs */
 	memcpy(&res_addr, res->ai_addr, res->ai_addrlen);
 	memcpy(&res_ai, res, sizeof(struct addrinfo));
@@ -283,7 +283,7 @@ static struct services_s* udpxy_parse(char* url) {
 	res_ai.ai_canonname = NULL;
 	res_ai.ai_next = NULL;
 	serv.addr = &res_ai;
-	
+
 	if (strcmp(msrc, "") != 0 && msrc != NULL) {
 		/* Copy result into statically allocated structs */
 		memcpy(&msrc_res_addr, msrc_res->ai_addr, msrc_res->ai_addrlen);
@@ -293,7 +293,7 @@ static struct services_s* udpxy_parse(char* url) {
 		msrc_res_ai.ai_next = NULL;
 		serv.msrc_addr = &msrc_res_ai;
 	}
-	
+
 	serv.msrc = strdup(msrc);
 
 	return &serv;
@@ -312,8 +312,8 @@ static void startRTPstream(int client, struct services_s *service){
 	fd_set rfds;
 	struct timeval timeout;
 	int on = 1;
-	
-	sock = socket(service->addr->ai_family, service->addr->ai_socktype, 
+
+	sock = socket(service->addr->ai_family, service->addr->ai_socktype,
 			service->addr->ai_protocol);
         r = setsockopt(sock, SOL_SOCKET,
                         SO_REUSEADDR, &on, sizeof(on));
@@ -321,14 +321,14 @@ static void startRTPstream(int client, struct services_s *service){
                 logger(LOG_ERROR, "SO_REUSEADDR "
                 "failed: %s\n", strerror(errno));
         }
-	
+
 	r = bind(sock,(struct sockaddr *) service->addr->ai_addr, service->addr->ai_addrlen);
 	if (r) {
 		logger(LOG_ERROR, "Cannot bind: %s\n",
 				strerror(errno));
 		exit(RETVAL_RTP_FAILED);
 	}
-	
+
 	memcpy(&(gr.gr_group), service->addr->ai_addr, service->addr->ai_addrlen);
 
 	switch (service->addr->ai_family) {
@@ -336,7 +336,7 @@ static void startRTPstream(int client, struct services_s *service){
 			level = SOL_IP;
 			gr.gr_interface = 0;
 			break;
-			
+
 		case AF_INET6:
 			level = SOL_IPV6;
 			gr.gr_interface = ((const struct sockaddr_in6 *)
@@ -346,7 +346,7 @@ static void startRTPstream(int client, struct services_s *service){
 			logger(LOG_ERROR, "Address family don't support mcast.\n");
 			exit(RETVAL_SOCK_READ_FAILED);
 	}
-	
+
 	if (strcmp(service->msrc, "") != 0 && service->msrc != NULL) {
 		gsr.gsr_group = gr.gr_group;
 		gsr.gsr_interface = gr.gr_interface;
@@ -357,7 +357,7 @@ static void startRTPstream(int client, struct services_s *service){
 		r = setsockopt(sock, level,
 			MCAST_JOIN_GROUP, &gr, sizeof(gr));
 	}
-	
+
 	if (r) {
 		logger(LOG_ERROR, "Cannot join mcast group: %s\n",
 				strerror(errno));
@@ -372,7 +372,7 @@ static void startRTPstream(int client, struct services_s *service){
 		FD_SET(client, &rfds); /* Will be set if connection to client lost.*/
 		timeout.tv_sec = 5;
 		timeout.tv_usec = 0;
-		
+
 		/* We use select to get rid of recv stuck if
 		 * multicast group is unoperated.
 		 */
@@ -394,8 +394,8 @@ static void startRTPstream(int client, struct services_s *service){
 			writeToClient(client, buf, sizeof(buf));
 			continue;
 		}
-		
-		if (actualr < 12 || (buf[0]&0xC0) != 0x80) { 
+
+		if (actualr < 12 || (buf[0]&0xC0) != 0x80) {
 			/*malformed RTP/UDP/IP packet*/
 			logger(LOG_DEBUG,"Malformed RTP packet received\n");
 			continue;
@@ -408,7 +408,7 @@ static void startRTPstream(int client, struct services_s *service){
 		}
 		payloadlength = actualr - payloadstart;
 		if (buf[0]&0x20) { /*Padding*/
-			payloadlength -= buf[actualr]; 
+			payloadlength -= buf[actualr];
 			/*last octet indicate padding length*/
 		}
 		if(payloadlength<0) {
@@ -450,12 +450,12 @@ void clientService(int s) {
 
 	signal(SIGPIPE, &sigpipe_handler);
 
-	client = fdopen(s, "r"); 
+	client = fdopen(s, "r");
 	/*read only one line*/
 	if (fgets(buf, sizeof(buf), client) == NULL) {
 		exit(RETVAL_READ_FAILED);
 	}
-	numfields = sscanf(buf,"%as %as %c", &method, &url, &httpver);
+	numfields = sscanf(buf,"%ms %ms %c", &method, &url, &httpver);
 	if(numfields<2) {
 		logger(LOG_DEBUG, "Non-HTTP input.\n");
 	}
@@ -474,7 +474,7 @@ void clientService(int s) {
 		}
 
 	if (strcmp(method, "GET") != 0) {
-		if (numfields == 3) 
+		if (numfields == 3)
 			headers(s, STATUS_501, CONTENT_HTML);
 		writeToClient(s, (uint8_t*) unimplemented, sizeof(unimplemented)-1);
 		exit(RETVAL_UNKNOWN_METHOD);
@@ -483,7 +483,7 @@ void clientService(int s) {
 
 	urlfrom = rindex(url, '/');
 	if (urlfrom == NULL || (conf_hostname && strcasecmp(conf_hostname, hostname)!=0)) {
-		if (numfields == 3) 
+		if (numfields == 3)
 			headers(s, STATUS_400, CONTENT_HTML);
 		writeToClient(s, (uint8_t*) badrequest, sizeof(badrequest)-1);
 		exit(RETVAL_BAD_REQUEST);
@@ -500,14 +500,14 @@ void clientService(int s) {
 	free(url); url=NULL;
 
 	if (servi == NULL) {
-		if (numfields == 3) 
+		if (numfields == 3)
 			headers(s, STATUS_404, CONTENT_HTML);
 		writeToClient(s, (uint8_t*) serviceNotFound, sizeof(serviceNotFound)-1);
 		exit(RETVAL_CLEAN);
 	}
 
 	if (clientcount > conf_maxclients) { /*Too much clients*/
-		if (numfields == 3) 
+		if (numfields == 3)
 			headers(s, STATUS_503, CONTENT_HTML);
 		writeToClient(s, (uint8_t*) serviceUnavailable, sizeof(serviceUnavailable)-1);
 		exit(RETVAL_CLEAN);

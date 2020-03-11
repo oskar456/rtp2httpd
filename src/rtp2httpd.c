@@ -96,7 +96,7 @@ void childhandler(int signum) { /* SIGCHLD handler */
 
 
 	while ( (child = waitpid (-1, &status, WNOHANG)) > 0){
-	
+
 		for (cli = clients; cli; cli = cli->next) {
 			if (child == cli->pid)
 				break;
@@ -176,7 +176,7 @@ int main(int argc, char *argv[]) {
 			logger(LOG_FATAL, "GAI: %s\n", gai_strerror(r));
 			exit(EXIT_FAILURE);
 		}
-	
+
 		for (ai = res; ai && maxs < MAX_S; ai = ai->ai_next) {
 			s[maxs] = socket(ai->ai_family, ai->ai_socktype,
 					ai->ai_protocol);
@@ -188,7 +188,7 @@ int main(int argc, char *argv[]) {
 				logger(LOG_ERROR, "SO_REUSEADDR "
 				"failed: %s\n", strerror(errno));
 			}
-	
+
 #ifdef IPV6_V6ONLY
 			if (ai->ai_family == AF_INET6) {
 				r = setsockopt(s[maxs], IPPROTO_IPV6,
@@ -199,7 +199,7 @@ int main(int argc, char *argv[]) {
 				}
 			}
 #endif /* IPV6_V6ONLY */
-	
+
 			r = bind(s[maxs], ai->ai_addr, ai->ai_addrlen);
 			if (r) {
 				logger(LOG_ERROR, "Cannot bind: %s\n",
@@ -225,7 +225,7 @@ int main(int argc, char *argv[]) {
 				logger(LOG_INFO, "Listening on %s port %s\n",
 						hbuf, sbuf);
 			}
-	
+
 			if (s[maxs] > nfds)
 				nfds = s[maxs];
 			maxs++;
