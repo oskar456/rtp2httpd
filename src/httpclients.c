@@ -481,6 +481,12 @@ void clientService(int s) {
 	}
 	free(method); method=NULL;
 
+	/*  Strip the trailing slash */
+	if (url[strlen(url)-1] == '/') {
+		logger(LOG_DEBUG, "Stripping trailing /: %s\n", url);
+		url[strlen(url)-1] = '\0';
+	}
+
 	urlfrom = rindex(url, '/');
 	if (urlfrom == NULL || (conf_hostname && strcasecmp(conf_hostname, hostname)!=0)) {
 		if (numfields == 3)
